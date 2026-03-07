@@ -24,6 +24,10 @@ type LoopbackBrowserAuthDeps = {
   getBridgeAuthForPort: typeof getBridgeAuthForPort;
 };
 
+const BROWSER_NO_RETRY_HINT =
+  "Do NOT retry the browser tool — it will keep failing. " +
+  "Use an alternative approach or inform the user that the browser is currently unavailable.";
+
 function isAbsoluteHttp(url: string): boolean {
   return /^https?:\/\//i.test(url.trim());
 }
@@ -106,9 +110,6 @@ function enhanceBrowserFetchError(url: string, err: unknown, timeoutMs: number):
     : "If this is a sandboxed session, ensure the sandbox browser is running.";
   // Model-facing suffix: explicitly tell the LLM NOT to retry.
   // Without this, models see "try again" and enter an infinite tool-call loop.
-  const modelHint =
-    "Do NOT retry the browser tool — it will keep failing. " +
-    "Use an alternative approach or inform the user that the browser is currently unavailable.";
   const msg = String(err);
   const msgLower = msg.toLowerCase();
   const looksLikeTimeout =
@@ -119,12 +120,22 @@ function enhanceBrowserFetchError(url: string, err: unknown, timeoutMs: number):
     msgLower.includes("aborterror");
   if (looksLikeTimeout) {
     return new Error(
-      `Can't reach the OpenClaw browser control service (timed out after ${timeoutMs}ms). ${operatorHint} ${modelHint}`,
+      `Can't reach the OpenClaw browser control service (timed out after ${timeoutMs}ms). ${operatorHint} ${BROWSER_NO_RETRY_HINT}`,
     );
   }
   return new Error(
-    `Can't reach the OpenClaw browser control service. ${operatorHint} ${modelHint} (${msg})`,
+    `Can't reach the OpenClaw browser control service. ${operatorHint} ${BROWSER_NO_RETRY_HINT} (${msg})`,
   );
+}
+
+function appendBrowserNoRetryHint(err: unknown): Error {
+  if (err instanceof Error) {
+    if (!err.message.includes(BROWSER_NO_RETRY_HINT)) {
+      err.message = `${err.message} ${BROWSER_NO_RETRY_HINT}`.trim();
+    }
+    return err;
+  }
+  return new Error(`${String(err)} ${BROWSER_NO_RETRY_HINT}`.trim());
 }
 
 async function fetchHttpJson<T>(
@@ -254,9 +265,10 @@ export async function fetchBrowserJson<T>(
       throw err;
     }
     // For dispatcher paths, timeout/abort errors indicate service operation failure,
-    // not network unreachability. Preserve the original error for clearer diagnosis.
+    // not network unreachability. Preserve original error context while adding
+    // explicit no-retry guidance so models do not loop on browser tool retries.
     if (isDispatcherPath) {
-      throw err;
+      throw appendBrowserNoRetryHint(err);
     }
     throw enhanceBrowserFetchError(url, err, timeoutMs);
   }

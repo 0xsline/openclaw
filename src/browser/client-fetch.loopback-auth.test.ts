@@ -1,14 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  loadConfig: vi.fn(() => ({
-    gateway: {
-      auth: {
-        token: "loopback-token",
+const mocks = vi.hoisted(() => {
+  const dispatcherDispatch = vi.fn(async () => ({ status: 200, body: { ok: true } }));
+  return {
+    loadConfig: vi.fn(() => ({
+      gateway: {
+        auth: {
+          token: "loopback-token",
+        },
       },
-    },
-  })),
-}));
+    })),
+    createBrowserControlContext: vi.fn(() => ({})),
+    startBrowserControlServiceFromConfig: vi.fn(async () => ({ ok: true })),
+    createBrowserRouteDispatcher: vi.fn(() => ({ dispatch: dispatcherDispatch })),
+    dispatcherDispatch,
+  };
+});
 
 vi.mock("../config/config.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../config/config.js")>();
@@ -19,14 +26,12 @@ vi.mock("../config/config.js", async (importOriginal) => {
 });
 
 vi.mock("./control-service.js", () => ({
-  createBrowserControlContext: vi.fn(() => ({})),
-  startBrowserControlServiceFromConfig: vi.fn(async () => ({ ok: true })),
+  createBrowserControlContext: mocks.createBrowserControlContext,
+  startBrowserControlServiceFromConfig: mocks.startBrowserControlServiceFromConfig,
 }));
 
 vi.mock("./routes/dispatcher.js", () => ({
-  createBrowserRouteDispatcher: vi.fn(() => ({
-    dispatch: vi.fn(async () => ({ status: 200, body: { ok: true } })),
-  })),
+  createBrowserRouteDispatcher: mocks.createBrowserRouteDispatcher,
 }));
 
 import { fetchBrowserJson } from "./client-fetch.js";
@@ -54,6 +59,10 @@ describe("fetchBrowserJson loopback auth", () => {
         },
       },
     });
+    mocks.startBrowserControlServiceFromConfig.mockReset();
+    mocks.startBrowserControlServiceFromConfig.mockResolvedValue({ ok: true });
+    mocks.dispatcherDispatch.mockReset();
+    mocks.dispatcherDispatch.mockResolvedValue({ status: 200, body: { ok: true } });
   });
 
   afterEach(() => {
@@ -113,5 +122,35 @@ describe("fetchBrowserJson loopback auth", () => {
     const init = fetchMock.mock.calls[0]?.[1];
     const headers = new Headers(init?.headers);
     expect(headers.get("authorization")).toBe("Bearer loopback-token");
+  });
+
+  it("preserves dispatcher timeout context and appends no-retry guidance", async () => {
+    mocks.dispatcherDispatch.mockRejectedValueOnce(new Error("timed out while running /snapshot"));
+
+    const rejection = fetchBrowserJson("/snapshot", { timeoutMs: 25 });
+    await expect(rejection).rejects.toMatchObject({
+      message: expect.stringContaining("timed out while running /snapshot"),
+    });
+    await expect(rejection).rejects.toMatchObject({
+      message: expect.stringContaining("Do NOT retry the browser tool — it will keep failing."),
+    });
+  });
+
+  it("does not duplicate no-retry guidance when dispatcher already includes it", async () => {
+    const hint =
+      "Do NOT retry the browser tool — it will keep failing. " +
+      "Use an alternative approach or inform the user that the browser is currently unavailable.";
+    mocks.dispatcherDispatch.mockRejectedValueOnce(new Error(`timed out. ${hint}`));
+
+    try {
+      await fetchBrowserJson("/snapshot", { timeoutMs: 25 });
+      throw new Error("expected fetchBrowserJson to reject");
+    } catch (err) {
+      expect(err).toBeInstanceOf(Error);
+      const message = (err as Error).message;
+      expect(message).toContain("timed out.");
+      const occurrences = message.split(hint).length - 1;
+      expect(occurrences).toBe(1);
+    }
   });
 });
