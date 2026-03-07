@@ -1,5 +1,6 @@
 import { extractText } from "../chat/message-extract.ts";
 import type { GatewayBrowserClient } from "../gateway.ts";
+import type { UiSettings } from "../storage.ts";
 import type { ChatAttachment } from "../ui-types.ts";
 import { generateUUID } from "../uuid.ts";
 
@@ -29,6 +30,7 @@ function isAssistantSilentReply(message: unknown): boolean {
 export type ChatState = {
   client: GatewayBrowserClient | null;
   connected: boolean;
+  settings?: UiSettings;
   sessionKey: string;
   chatLoading: boolean;
   chatMessages: unknown[];
@@ -196,12 +198,14 @@ export async function sendChatMessage(
     : undefined;
 
   try {
+    const notifyOnExit = state.settings?.tools?.exec?.notifyOnExit;
     await state.client.request("chat.send", {
       sessionKey: state.sessionKey,
       message: msg,
       deliver: false,
       idempotencyKey: runId,
       attachments: apiAttachments,
+      notifyOnExit: typeof notifyOnExit === "boolean" ? notifyOnExit : undefined,
     });
     return runId;
   } catch (err) {

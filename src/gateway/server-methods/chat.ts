@@ -864,6 +864,7 @@ export const chatHandlers: GatewayRequestHandlers = {
         content?: unknown;
       }>;
       timeoutMs?: number;
+      notifyOnExit?: boolean;
       idempotencyKey: string;
     };
     const sanitizedMessageResult = sanitizeChatSendMessageInput(p.message);
@@ -1055,6 +1056,7 @@ export const chatHandlers: GatewayRequestHandlers = {
           runId: clientRunId,
           abortSignal: abortController.signal,
           images: parsedImages.length > 0 ? parsedImages : undefined,
+          execNotifyOnExit: typeof p.notifyOnExit === "boolean" ? p.notifyOnExit : undefined,
           onAgentRunStart: (runId) => {
             agentRunStarted = true;
             const connId = typeof client?.connId === "string" ? client.connId : undefined;

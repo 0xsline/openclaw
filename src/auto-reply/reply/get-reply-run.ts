@@ -51,7 +51,7 @@ import type { TypingController } from "./typing.js";
 import { appendUntrustedContext } from "./untrusted-context.js";
 
 type AgentDefaults = NonNullable<OpenClawConfig["agents"]>["defaults"];
-type ExecOverrides = Pick<ExecToolDefaults, "host" | "security" | "ask" | "node">;
+type ExecOverrides = Pick<ExecToolDefaults, "host" | "security" | "ask" | "node" | "notifyOnExit">;
 
 function buildResetSessionNoticeText(params: {
   provider: string;
@@ -228,6 +228,13 @@ export async function runPreparedReply(
     execOverrides,
     abortedLastRun,
   } = params;
+
+  if (opts?.execNotifyOnExit !== undefined) {
+    execOverrides = {
+      ...execOverrides,
+      notifyOnExit: opts.execNotifyOnExit,
+    };
+  }
   let currentSystemSent = systemSent;
 
   const isFirstTurnInSession = isNewSession || !currentSystemSent;

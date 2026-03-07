@@ -172,6 +172,25 @@ describe("gateway server chat", () => {
     expect(ctx?.BodyForCommands).toBe("Café\tline");
   });
 
+  test("threads chat.send notifyOnExit into run exec overrides", async () => {
+    const spy = vi.mocked(getReplyFromConfig);
+    spy.mockClear();
+    const spyCalls = spy.mock.calls as unknown[][];
+    const callsBefore = spyCalls.length;
+
+    const res = await rpcReq(ws, "chat.send", {
+      sessionKey: "main",
+      message: "hello",
+      idempotencyKey: "idem-notify-on-exit-1",
+      notifyOnExit: false,
+    });
+    expect(res.ok).toBe(true);
+
+    await waitFor(() => spyCalls.length > callsBefore);
+    const opts = spyCalls.at(-1)?.[1] as { execNotifyOnExit?: boolean } | undefined;
+    expect(opts?.execNotifyOnExit).toBe(false);
+  });
+
   test("handles chat send and history flows", async () => {
     const tempDirs: string[] = [];
     let webchatWs: WebSocket | undefined;

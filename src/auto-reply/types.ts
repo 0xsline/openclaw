@@ -66,6 +66,8 @@ export type GetReplyOptions = {
   hasRepliedRef?: { value: boolean };
   /** Override agent timeout in seconds (0 = no timeout). Threads through to resolveAgentTimeoutMs. */
   timeoutOverrideSeconds?: number;
+  /** Per-turn override for tools.exec.notifyOnExit (used by WebChat settings wiring). */
+  execNotifyOnExit?: boolean;
 };
 
 export type ReplyPayload = {
