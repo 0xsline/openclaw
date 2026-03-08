@@ -24,6 +24,7 @@ import type { OpenClawConfig, ReplyToMode, TelegramAccountConfig } from "../conf
 import { danger, logVerbose } from "../globals.js";
 import { getAgentScopedMediaLocalRoots } from "../media/local-roots.js";
 import type { RuntimeEnv } from "../runtime.js";
+import { stripReasoningTagsFromText } from "../shared/text/reasoning-tags.js";
 import type { TelegramMessageContext } from "./bot-message-context.js";
 import type { TelegramBotOptions } from "./bot.js";
 import { deliverReplies } from "./bot/delivery.js";
@@ -605,14 +606,6 @@ export const dispatchTelegramMessage = async ({
             await reasoningLane.stream?.stop();
             reasoningStepState.resetForNextStep();
           }
-          const canSendAsIs =
-            hasMedia || (typeof payload.text === "string" && payload.text.length > 0);
-          if (!canSendAsIs) {
-            if (info.kind === "final") {
-              await flushBufferedFinalAnswer();
-            }
-            return;
-          }
           // Fix for Issue #39324: Strip thinking tags from payload text
           // to avoid duplicate messages (raw + cleaned) when reasoning is suppressed
           // and segments array is empty (e.g., unclosed thinking tags).
@@ -620,6 +613,14 @@ export const dispatchTelegramMessage = async ({
             typeof payload.text === "string"
               ? { ...payload, text: stripReasoningTagsFromText(payload.text, { mode: "strict" }) }
               : payload;
+          const canSendCleanedPayload =
+            hasMedia || (typeof cleanedPayload.text === "string" && cleanedPayload.text.length > 0);
+          if (!canSendCleanedPayload) {
+            if (info.kind === "final") {
+              await flushBufferedFinalAnswer();
+            }
+            return;
+          }
           await sendPayload(cleanedPayload);
           if (info.kind === "final") {
             await flushBufferedFinalAnswer();

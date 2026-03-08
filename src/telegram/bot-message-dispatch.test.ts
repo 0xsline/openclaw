@@ -1171,6 +1171,21 @@ describe("dispatchTelegramMessage draft streaming", () => {
     },
   );
 
+  it("skips outbound send when strict reasoning-tag stripping leaves empty text and has no media", async () => {
+    const { answerDraftStream } = setupDraftStreams({ answerMessageId: 999 });
+    dispatchReplyWithBufferedBlockDispatcher.mockImplementation(async ({ dispatcherOptions }) => {
+      await dispatcherOptions.deliver({ text: "<think>internal reasoning" }, { kind: "final" });
+      return { queuedFinal: true };
+    });
+    deliverReplies.mockResolvedValue({ delivered: true });
+
+    await dispatchWithContext({ context: createContext(), streamMode: "partial" });
+
+    expect(deliverReplies).not.toHaveBeenCalled();
+    expect(editMessageTelegram).not.toHaveBeenCalled();
+    expect(answerDraftStream.clear).toHaveBeenCalledTimes(1);
+  });
+
   it("uses message preview transport for all DM lanes when streaming is active", async () => {
     setupDraftStreams({ answerMessageId: 999, reasoningMessageId: 111 });
     dispatchReplyWithBufferedBlockDispatcher.mockImplementation(
