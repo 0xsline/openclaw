@@ -103,7 +103,7 @@ export async function updateSessionStoreAfterAgentRun(params: {
     next.totalTokensFresh = true;
   } else if (
     hasNonzeroUsage(usage) ||
-    (typeof promptTokens === "number" && Number.isFinite(promptTokens))
+    (typeof promptTokens === "number" && Number.isFinite(promptTokens) && promptTokens > 0)
   ) {
     next.totalTokens = undefined;
     next.totalTokensFresh = false;
