@@ -269,14 +269,18 @@ function extractSubagentOutputText(message: unknown): string {
     return extractToolResultText((message as ToolResultMessage).content);
   }
 
-  // Try user role as fallback - subagent results might be in user messages
+  // Try user role in the rare case the gateway stores the final result there.
+  // IMPORTANT: Do not treat arbitrary user text as output (it may be the task prompt).
   if (role === "user") {
-    if (typeof content === "string") {
-      return sanitizeTextContent(content);
+    const rawResult = (message as { result?: unknown }).result;
+    if (typeof rawResult === "string") {
+      return sanitizeTextContent(rawResult);
     }
-    if (Array.isArray(content)) {
-      return extractInlineTextContent(content);
+    const output = (message as { output?: unknown }).output;
+    if (typeof output === "string") {
+      return sanitizeTextContent(output);
     }
+    return "";
   }
 
   // Handle null/undefined role - check all possible content fields
